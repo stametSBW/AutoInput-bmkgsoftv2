@@ -68,7 +68,6 @@ BMKG-AutoInput/
 │   ├── ui/             # Antarmuka pengguna
 │   └── utils/          # Utilitas
 ├── legacy/             # Kode lama (untuk referensi)
-├── autosend_synop.py   # Script otomatisasi pengiriman SYNOP
 ├── run.py             # Entry point aplikasi
 └── README.md          # Dokumentasi
 ```
