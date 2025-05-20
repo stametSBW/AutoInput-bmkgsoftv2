@@ -67,18 +67,42 @@ class BrowserManager:
 
     def reload_browser(self):
         """
-        Reload the browser page.
+        Reload the browser page with proper error handling and state management.
         """
         try:
             if not self.page:
-                raise RuntimeError("Browser not initialized")
-            
-            self.page.reload()
-            self.page.wait_for_load_state("networkidle")
-            logger.info("Page reloaded successfully")
+                logger.warning("Browser not initialized, attempting to restart...")
+                self.start_browser()
+                return
+
+            # Check if page is still valid
+            try:
+                self.page.url
+            except Exception:
+                logger.warning("Page is no longer valid, attempting to navigate to form...")
+                self.navigate_to_form()
+                return
+
+            # Attempt to reload the page
+            try:
+                self.page.reload()
+                self.page.wait_for_load_state("networkidle")
+                logger.info("Page reloaded successfully")
+            except Exception as reload_error:
+                logger.error(f"Failed to reload page: {reload_error}")
+                # If reload fails, try to navigate to the form again
+                logger.info("Attempting to navigate to form instead...")
+                self.navigate_to_form()
+
         except Exception as e:
-            logger.error(f"Failed to reload page: {e}")
-            raise
+            logger.error(f"Critical error during reload: {e}")
+            # If all else fails, try to restart the browser
+            try:
+                self.close_browser()
+                self.start_browser()
+            except Exception as restart_error:
+                logger.error(f"Failed to restart browser: {restart_error}")
+                raise RuntimeError("Failed to recover browser state")
 
     def stop_browser(self):
         """

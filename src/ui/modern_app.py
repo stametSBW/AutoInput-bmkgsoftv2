@@ -328,24 +328,6 @@ class ModernApp(QMainWindow):
         auto_send_group.setLayout(auto_send_layout)
         layout.addWidget(auto_send_group)
 
-        # Progress group
-        progress_group = QGroupBox("Progress")
-        progress_layout = QVBoxLayout()
-        
-        # Status label
-        self.status_label = QLabel("Ready")
-        self.status_label.setStyleSheet("color: #666666;")
-        progress_layout.addWidget(self.status_label)
-        
-        # Progress bar
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setMinimum(0)
-        self.progress_bar.setMaximum(100)
-        self.progress_bar.setValue(0)
-        progress_layout.addWidget(self.progress_bar)
-        
-        progress_group.setLayout(progress_layout)
-        layout.addWidget(progress_group)
 
         # Run Auto Input button
         self.run_btn = QPushButton("Run Auto Input")
@@ -370,6 +352,25 @@ class ModernApp(QMainWindow):
         
         control_group.setLayout(control_layout)
         layout.addWidget(control_group)
+
+                # Progress group
+        progress_group = QGroupBox("Progress")
+        progress_layout = QVBoxLayout()
+        
+        # Status label
+        self.status_label = QLabel("Ready")
+        self.status_label.setStyleSheet("color: #666666;")
+        progress_layout.addWidget(self.status_label)
+        
+        # Progress bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(100)
+        self.progress_bar.setValue(0)
+        progress_layout.addWidget(self.progress_bar)
+        
+        progress_group.setLayout(progress_layout)
+        layout.addWidget(progress_group)
 
         self.update_button_states()
 

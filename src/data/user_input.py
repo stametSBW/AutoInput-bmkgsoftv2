@@ -51,15 +51,15 @@ class UserInputUpdater:
                 value = row.iloc[0][key]
                 # Jika key berada di daftar parameter yang memerlukan satu angka di belakang koma
                 if key in decimal_keys:
-                    if pd.notna(value):  # Pastikan nilai bukan NaN
-                        try:
+                    try:
+                        if pd.notna(value):  # Pastikan nilai bukan NaN
                             # Konversi ke float lalu ke string dengan satu angka desimal
                             self.user_input[key] = f"{float(value):.1f}"
-                        except (ValueError, TypeError):
-                            # Jika konversi gagal, set nilai default 0.0
-                            self.user_input[key] = "0.0"
-                    else:
-                        self.user_input[key] = "0.0"  # Jika NaN, set ke 0.0
+                        else:
+                            self.user_input[key] = "0.0"  # Jika NaN, set ke 0.0
+                    except (ValueError, TypeError):
+                        # Jika konversi gagal, set nilai default 0.0
+                        self.user_input[key] = "0.0"
                 else:
                     # Untuk kunci lainnya, jika NaN maka jadikan string kosong
                     if pd.notna(value):
