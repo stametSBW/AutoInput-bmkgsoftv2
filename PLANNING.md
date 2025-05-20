@@ -1,7 +1,7 @@
 # BMKG Satu Auto Input Project - Comprehensive Planning
 
 ## Project Vision
-Develop a robust, 24/7 web automation solution for BMKG Satu data input, combining reliability, efficiency, and scalability.
+Develop a robust, 24/7 web automation solution for BMKG Satu data input, combining reliability, efficiency, and scalability using modern ui/ux but eficient.
 
 ## System Architecture Overview
 

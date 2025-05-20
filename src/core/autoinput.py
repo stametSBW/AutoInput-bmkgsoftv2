@@ -1,6 +1,8 @@
 import re
 from datetime import datetime, timezone
+from ..utils import get_logger
 
+logger = get_logger(__name__)
 
 class AutoInput:
     def __init__(self, page, user_input, obs, ww, w1w2, awan_lapisan, arah_angin, ci, cm, ch):

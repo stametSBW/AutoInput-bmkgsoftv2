@@ -534,3 +534,12 @@ class AutoInput:
         except Exception as e:
             logging.error(f"Error clicking Preview button: {e}")
             raise
+
+
+class InputProcessor:
+    def __init__(self):
+        pass
+
+    def process(self, data):
+        # Placeholder for processing logic
+        return data

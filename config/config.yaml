@@ -1,0 +1,70 @@
+# BMKG Auto Input Configuration
+
+# Paths
+paths:
+  user_data_dir: ${HOME}/Documents/autoinput
+  log_dir: logs
+  temp_dir: temp
+
+# Logging
+logging:
+  level: INFO
+  max_size: 10485760  # 10MB
+  backup_count: 5
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Browser settings
+browser:
+  type: chromium
+  headless: false
+  timeout: 30000  # 30 seconds
+  viewport:
+    width: 1920
+    height: 1080
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+
+# UI settings
+ui:
+  window_size: "600x400"
+  theme: default
+  font:
+    family: "Segoe UI"
+    size: 10
+  colors:
+    primary: "#007bff"
+    secondary: "#6c757d"
+    success: "#28a745"
+    danger: "#dc3545"
+    warning: "#ffc107"
+    info: "#17a2b8"
+
+# Automation settings
+automation:
+  retry_count: 3
+  retry_delay: 1000  # 1 second
+  wait_timeout: 5000  # 5 seconds
+  validation:
+    temperature:
+      min: -50
+      max: 50
+    pressure:
+      min: 800
+      max: 1100
+    wind_speed:
+      min: 0
+      max: 200
+
+# Security
+security:
+  encrypt_credentials: true
+  key_rotation_days: 30
+  session_timeout: 3600  # 1 hour
+
+# Monitoring
+monitoring:
+  enabled: true
+  metrics_port: 9090
+  health_check_interval: 60  # seconds
+  alert_threshold:
+    error_rate: 0.1
+    response_time: 5000  # milliseconds 

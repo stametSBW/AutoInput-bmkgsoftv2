@@ -1,6 +1,8 @@
 from playwright.sync_api import Playwright
-from screeninfo import get_monitors  # Untuk mendapatkan ukuran layar
+from screeninfo import get_monitors
+from ..utils import get_logger
 
+logger = get_logger(__name__)
 
 class BrowserLoader:
     def __init__(self, playwright: Playwright, user_data_dir: str, headless: bool = False):
@@ -28,7 +30,7 @@ class BrowserLoader:
         Returns:
             page (playwright.sync_api.Page): Objek halaman Playwright yang diload.
         """
-        print("Launching browser with persistent context...")
+        logger.info("Launching browser with persistent context...")
         # chrome_executable_path = "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe"
 
         # Meluncurkan browser dengan konteks persisten (session tersimpan)
@@ -44,11 +46,11 @@ class BrowserLoader:
 
         # Atur ukuran tampilan browser ke layar penuh
         page.set_viewport_size({"width": 1915, "height": 911})
-        print(f"Navigating to {url}...")
+        logger.info(f"Navigating to {url}...")
         page.goto(url)
 
         # Tunggu hingga halaman sepenuhnya terload
         # page.wait_for_load_state("networkidle")
-        print("Page fully loaded.")
+        logger.info("Page fully loaded.")
 
         return page
