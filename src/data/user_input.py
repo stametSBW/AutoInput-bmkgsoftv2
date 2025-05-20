@@ -41,7 +41,8 @@ class UserInputUpdater:
         # Parameter yang harus memiliki satu angka di belakang koma
         decimal_keys = [
             'lama_penyinaran', 'suhu_bola_kering', 'suhu_bola_basah',
-            'suhu_maksimum', 'suhu_minimum', 'tekanan_qff', 'tekanan_qfe'
+            'suhu_maksimum', 'suhu_minimum', 'tekanan_qff', 'tekanan_qfe',
+            'penguapan', 'hujan_ditakar'
         ]
 
         # Update user_input dengan data dari row yang ditemukan
@@ -51,10 +52,14 @@ class UserInputUpdater:
                 # Jika key berada di daftar parameter yang memerlukan satu angka di belakang koma
                 if key in decimal_keys:
                     if pd.notna(value):  # Pastikan nilai bukan NaN
-                        self.user_input[
-                            key] = f"{float(value):.1f}"  # Konversi ke float lalu ke string dengan satu angka desimal
+                        try:
+                            # Konversi ke float lalu ke string dengan satu angka desimal
+                            self.user_input[key] = f"{float(value):.1f}"
+                        except (ValueError, TypeError):
+                            # Jika konversi gagal, set nilai default 0.0
+                            self.user_input[key] = "0.0"
                     else:
-                        self.user_input[key] = ""  # Jika NaN, jadikan string kosong
+                        self.user_input[key] = "0.0"  # Jika NaN, set ke 0.0
                 else:
                     # Untuk kunci lainnya, jika NaN maka jadikan string kosong
                     if pd.notna(value):

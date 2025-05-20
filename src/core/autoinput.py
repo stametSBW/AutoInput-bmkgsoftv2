@@ -96,35 +96,40 @@ class AutoInput:
                 page.get_by_label("Suhu Minimum (℃)").click()
                 page.get_by_label("Suhu Minimum (℃)").fill(user_input['suhu_minimum'])
 
-                # 16 Hujan Ditakar
+                # 16 Hujan Ditakar - Format to one decimal place
+                hujan_ditakar = f"{float(user_input['hujan_ditakar']):.1f}"
                 page.get_by_label("Hujan takaran terakhir (mm)").click()
-                page.get_by_label("Hujan takaran terakhir (mm)").fill(user_input['hujan_ditakar'])
+                page.get_by_label("Hujan takaran terakhir (mm)").fill(hujan_ditakar)
 
-                # 42 Penguapan
+                # 42 Penguapan - Format to one decimal place
+                penguapan = f"{float(user_input['penguapan']):.1f}"
                 page.get_by_label("Penguapan (mm)").click()
-                page.get_by_label("Penguapan (mm)").fill(user_input['penguapan'])
+                page.get_by_label("Penguapan (mm)").fill(penguapan)
 
                 # 43 Pengenal Data Penguapan (IE)
                 page.locator("#evaporation_eq_indicator_ie").get_by_role("combobox").click()
                 page.locator("#evaporation_eq_indicator_ie").get_by_role("textbox").fill(user_input['pengenal_penguapan'])
 
-                # 44 Lama Penyinaran Matahari
+                # 44 Lama Penyinaran Matahari - Format to one decimal place
+                lama_penyinaran = f"{float(user_input['lama_penyinaran']):.1f}"
                 page.get_by_label("Lama Penyinaran Matahari (jam)").click()
-                page.get_by_label("Lama Penyinaran Matahari (jam)").fill(user_input['lama_penyinaran'])
+                page.get_by_label("Lama Penyinaran Matahari (jam)").fill(lama_penyinaran)
 
             elif jam_penting == 12:
                 # 13 Suhu Maksimum
                 page.get_by_label("Suhu Maksimum (℃)").click()
                 page.get_by_label("Suhu Maksimum (℃)").fill(user_input['suhu_maksimum'])
 
-                # 16 Hujan Ditakar
+                # 16 Hujan Ditakar - Format to one decimal place
+                hujan_ditakar = f"{float(user_input['hujan_ditakar']):.1f}"
                 page.get_by_label("Hujan takaran terakhir (mm)").click()
-                page.get_by_label("Hujan takaran terakhir (mm)").fill(user_input['hujan_ditakar'])
+                page.get_by_label("Hujan takaran terakhir (mm)").fill(hujan_ditakar)
 
             elif jam_penting in [3, 6, 9, 15, 18, 21]:
-                # 16 Hujan Ditakar
+                # 16 Hujan Ditakar - Format to one decimal place
+                hujan_ditakar = f"{float(user_input['hujan_ditakar']):.1f}"
                 page.get_by_label("Hujan takaran terakhir (mm)").click()
-                page.get_by_label("Hujan takaran terakhir (mm)").fill(user_input['hujan_ditakar'])
+                page.get_by_label("Hujan takaran terakhir (mm)").fill(hujan_ditakar)
 
             else:
                 print("Jam Pengamatan Tidak Termasuk Jam Pengiriman Utama.")

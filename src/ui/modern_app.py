@@ -179,6 +179,11 @@ class ModernApp(QMainWindow):
             QPushButton#primary:hover {
                 background-color: #283593;
             }
+            QPushButton#primary:disabled {
+                background-color: #9e9e9e;  /* Grey */
+                color: #e0e0e0;
+                border: none;
+            }
             QPushButton#success {
                 background-color: #2e7d32;  /* Green */
                 color: white;
@@ -186,6 +191,11 @@ class ModernApp(QMainWindow):
             }
             QPushButton#success:hover {
                 background-color: #388e3c;
+            }
+            QPushButton#success:disabled {
+                background-color: #9e9e9e;  /* Grey */
+                color: #e0e0e0;
+                border: none;
             }
             QPushButton#warning {
                 background-color: #f57c00;  /* Orange */
@@ -195,10 +205,15 @@ class ModernApp(QMainWindow):
             QPushButton#warning:hover {
                 background-color: #fb8c00;
             }
+            QPushButton#warning:disabled {
+                background-color: #9e9e9e;  /* Grey */
+                color: #e0e0e0;
+                border: none;
+            }
             QPushButton:disabled {
-                background-color: #9e9e9e;  /* Grey background */
-                color: #e0e0e0;  /* Light grey text */
-                border: 1px solid #757575;  /* Darker grey border */
+                background-color: #9e9e9e;  /* Grey */
+                color: #e0e0e0;
+                border: none;
             }
             QComboBox {
                 padding: 8px;
@@ -313,12 +328,32 @@ class ModernApp(QMainWindow):
         auto_send_group.setLayout(auto_send_layout)
         layout.addWidget(auto_send_group)
 
+        # Progress group
+        progress_group = QGroupBox("Progress")
+        progress_layout = QVBoxLayout()
+        
+        # Status label
+        self.status_label = QLabel("Ready")
+        self.status_label.setStyleSheet("color: #666666;")
+        progress_layout.addWidget(self.status_label)
+        
+        # Progress bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(100)
+        self.progress_bar.setValue(0)
+        progress_layout.addWidget(self.progress_bar)
+        
+        progress_group.setLayout(progress_layout)
+        layout.addWidget(progress_group)
+
         # Run Auto Input button
         self.run_btn = QPushButton("Run Auto Input")
         self.run_btn.setObjectName("success")
         self.run_btn.clicked.connect(self.run_processing)
         self.run_btn.setMinimumHeight(50)  # Make it bigger
         layout.addWidget(self.run_btn)
+
         # Control buttons group
         control_group = QGroupBox("Controls")
         control_layout = QHBoxLayout()
@@ -336,36 +371,10 @@ class ModernApp(QMainWindow):
         control_group.setLayout(control_layout)
         layout.addWidget(control_group)
 
-        # Progress group at the bottom
-        progress_group = QGroupBox("Progress")
-        progress_layout = QVBoxLayout()
-        
-        # Status label
-        self.status_label = QLabel("Ready")
-        self.status_label.setStyleSheet("color: #666666;")
-        progress_layout.addWidget(self.status_label)
-        
-        progress_group.setLayout(progress_layout)
-        layout.addWidget(progress_group)
-
         self.update_button_states()
-
-    def check_browser_open(self):
-        """Check if browser is open and show message if not."""
-        if not self.browser_opened:
-            QMessageBox.warning(
-                self,
-                "Browser Not Open",
-                "Please open the browser first before using this feature!",
-                QMessageBox.StandardButton.Ok
-            )
-            return False
-        return True
 
     def start_auto_send(self):
         """Start the auto-send process."""
-        if not self.check_browser_open():
-            return
         try:
             self.worker_thread.send_command('start_auto_send')
             self.auto_send_status.setText("Auto Send: Aktif")
@@ -378,8 +387,6 @@ class ModernApp(QMainWindow):
 
     def stop_auto_send(self):
         """Stop the auto-send process."""
-        if not self.check_browser_open():
-            return
         try:
             self.worker_thread.send_command('stop_auto_send')
             self.auto_send_status.setText("Auto Send: Tidak Aktif")
@@ -434,9 +441,8 @@ class ModernApp(QMainWindow):
         self.disable_all_buttons()
 
     def reload_browser(self):
-        if self.check_browser_open():
-            self.worker_thread.send_command('reload')
-            self.disable_all_buttons()
+        self.worker_thread.send_command('reload')
+        self.disable_all_buttons()
 
     def disable_all_buttons(self):
         self.start_auto_send_btn.setEnabled(False)
@@ -447,8 +453,6 @@ class ModernApp(QMainWindow):
         self.open_browser_btn.setEnabled(False)
 
     def run_processing(self):
-        if not self.check_browser_open():
-            return
         try:
             FileHandler.validate_file_path(self.file_label.text())
             selected_time = int(self.time_combo.currentText().split(":")[0])
