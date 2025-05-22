@@ -35,11 +35,23 @@ class LogConfig:
         self._configure_app_logger()
         self._configure_browser_logger()
         self._configure_error_logger()
+        
+        # Log initial configuration
+        root_logger = logging.getLogger()
+        root_logger.debug("Logging configuration initialized")
+        root_logger.debug(f"Log directory: {self.log_dir}")
+        root_logger.debug(f"App log: {self.app_log}")
+        root_logger.debug(f"Browser log: {self.browser_log}")
+        root_logger.debug(f"Error log: {self.error_log}")
     
     def _configure_root_logger(self) -> None:
         """Configure the root logger."""
         root_logger = logging.getLogger()
-        root_logger.setLevel(logging.INFO)
+        root_logger.setLevel(logging.DEBUG)  # Set to DEBUG to capture all messages
+        
+        # Remove any existing handlers
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
         
         # Console handler
         console_handler = logging.StreamHandler()
@@ -49,11 +61,25 @@ class LogConfig:
         )
         console_handler.setFormatter(console_formatter)
         root_logger.addHandler(console_handler)
+        
+        # Root file handler
+        file_handler = logging.handlers.RotatingFileHandler(
+            self.app_log,
+            maxBytes=10*1024*1024,  # 10MB
+            backupCount=5
+        )
+        file_handler.setLevel(logging.DEBUG)  # Capture all messages
+        file_formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        file_handler.setFormatter(file_formatter)
+        root_logger.addHandler(file_handler)
     
     def _configure_app_logger(self) -> None:
         """Configure the application logger."""
         app_logger = logging.getLogger('app')
-        app_logger.setLevel(logging.INFO)
+        app_logger.setLevel(logging.DEBUG)  # Set to DEBUG to capture all messages
+        app_logger.propagate = True  # Propagate to root logger
         
         # File handler
         file_handler = logging.handlers.RotatingFileHandler(
@@ -61,7 +87,7 @@ class LogConfig:
             maxBytes=10*1024*1024,  # 10MB
             backupCount=5
         )
-        file_handler.setLevel(logging.INFO)
+        file_handler.setLevel(logging.DEBUG)
         file_formatter = logging.Formatter(
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
@@ -71,7 +97,8 @@ class LogConfig:
     def _configure_browser_logger(self) -> None:
         """Configure the browser automation logger."""
         browser_logger = logging.getLogger('browser')
-        browser_logger.setLevel(logging.INFO)
+        browser_logger.setLevel(logging.DEBUG)  # Set to DEBUG to capture all messages
+        browser_logger.propagate = True  # Propagate to root logger
         
         # File handler
         file_handler = logging.handlers.RotatingFileHandler(
@@ -79,7 +106,7 @@ class LogConfig:
             maxBytes=10*1024*1024,  # 10MB
             backupCount=5
         )
-        file_handler.setLevel(logging.INFO)
+        file_handler.setLevel(logging.DEBUG)
         file_formatter = logging.Formatter(
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
@@ -90,6 +117,7 @@ class LogConfig:
         """Configure the error logger."""
         error_logger = logging.getLogger('error')
         error_logger.setLevel(logging.ERROR)
+        error_logger.propagate = True  # Propagate to root logger
         
         # File handler
         file_handler = logging.handlers.RotatingFileHandler(
@@ -118,7 +146,9 @@ def get_logger(name: str) -> logging.Logger:
     Returns:
         A configured logger instance.
     """
-    return logging.getLogger(name)
+    logger = logging.getLogger(name)
+    logger.propagate = True  # Ensure propagation to root logger
+    return logger
 
 def setup_logging(log_dir: Optional[str] = None) -> LogConfig:
     """
