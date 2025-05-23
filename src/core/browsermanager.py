@@ -7,128 +7,102 @@ from playwright.sync_api import sync_playwright
 from .browserloader import BrowserLoader
 from ..utils import get_logger
 
-logger = get_logger('browser')  # Use the browser-specific logger
+logger = get_logger('browser')
 
 class BrowserManager:
+    """Manages browser interactions for the application."""
+    
+    # URLs for different pages
+    URLS = {
+        'auto_input': "https://bmkgsatu.bmkg.go.id/meteorologi/sinoptik",
+        'metar': "https://bmkgsatu.bmkg.go.id/meteorologi/metarspeci"
+    }
+    
     def __init__(self, user_data_dir):
+        """Initialize the browser manager.
+        
+        Args:
+            user_data_dir: Directory for browser user data
+        """
         self.playwright = None
         self.browser = None
         self.context = None
         self.page = None
         self.user_data_dir = user_data_dir
+        self.current_page = None
 
-    def start_browser(self):
-        """
-        Mulai browser menggunakan Playwright dan muat halaman BMKGSatu.
+    def start_browser(self, page_type='auto_input'):
+        """Start the browser and load the specified page.
+        
+        Args:
+            page_type: Type of page to load ('auto_input' or 'metar')
         """
         try:
             self.playwright = sync_playwright().start()
             if not os.path.exists(self.user_data_dir):
                 os.makedirs(self.user_data_dir)
 
-            # Inisialisasi Playwright
+            # Initialize Playwright
             loader = BrowserLoader(playwright=self.playwright, user_data_dir=self.user_data_dir, headless=False)
-            self.page = loader.load_page("https://bmkgsatu.bmkg.go.id/meteorologi/sinoptik")
+            self.page = loader.load_page(self.URLS[page_type])
             self.browser = loader.browser
+            self.current_page = page_type
             
             # Set viewport to full screen
-            self.page.set_viewport_size({"width": 1920, "height": 1020})
+            self.page.set_viewport_size({"width": 1920, "height": 920})
             # Maximize the browser window
             self.page.evaluate("window.moveTo(0, 0)")
             self.page.evaluate("window.resizeTo(screen.width, screen.height)")
             
-            logger.info("Browser started and page loaded in full screen mode.")
+            logger.info(f"Browser started and {page_type} page loaded in full screen mode.")
         except Exception as e:
             logger.error(f"Failed to launch browser: {str(e)}")
             messagebox.showerror("Error", f"Failed to start browser: {e}")
             raise
 
-    def navigate_to_form(self):
+    def navigate_to_page(self, page_type: str):
+        """Navigate to a specific page type.
+        
+        Args:
+            page_type: Type of page to navigate to ('auto_input' or 'metar')
         """
-        Navigate to the form page and wait for it to load.
-        """
+        if not self.page:
+            self.start_browser(page_type)
+            return
+            
         try:
-            logger.info("Navigating to BMKG form...")
-            self.page.goto("https://bmkgsatu.bmkg.go.id/meteorologi/sinoptik")
-            self.page.wait_for_load_state("networkidle")
-            logger.info("Successfully navigated to BMKG form")
+            if page_type != self.current_page:
+                self.page.goto(self.URLS[page_type])
+                self.current_page = page_type
+                self.page.wait_for_load_state("networkidle")
+                logger.info(f"Navigated to {page_type} page")
         except Exception as e:
-            logger.error(f"Failed to navigate to form: {str(e)}")
+            logger.error(f"Failed to navigate to {page_type} page: {str(e)}")
             raise
 
-    def close_browser(self):
-        """
-        Close the browser cleanly.
-        """
-        try:
-            if self.browser:
-                logger.info("Closing browser...")
-                self.browser.close()
-                self.browser = None
-                self.context = None
-                self.page = None
-                logger.info("Browser closed successfully")
-        except Exception as e:
-            logger.error(f"Error closing browser: {str(e)}")
-            raise
-
-    def reload_browser(self):
-        """
-        Reload the browser page with proper error handling and state management.
-        """
-        try:
-            if not self.page:
-                logger.warning("Browser not initialized, attempting to restart...")
-                self.start_browser()
-                return
-
-            # Check if page is still valid
-            try:
-                self.page.url
-            except Exception:
-                logger.warning("Page is no longer valid, attempting to navigate to form...")
-                self.navigate_to_form()
-                return
-
-            # Attempt to reload the page
+    def reload_page(self):
+        """Reload the current page."""
+        if self.page:
             try:
                 self.page.reload()
                 self.page.wait_for_load_state("networkidle")
                 logger.info("Page reloaded successfully")
-            except Exception as reload_error:
-                logger.error(f"Failed to reload page: {reload_error}")
-                # If reload fails, try to navigate to the form again
-                logger.info("Attempting to navigate to form instead...")
-                self.navigate_to_form()
-
-        except Exception as e:
-            logger.error(f"Critical error during reload: {e}")
-            # If all else fails, try to restart the browser
-            try:
-                self.close_browser()
-                self.start_browser()
-            except Exception as restart_error:
-                logger.error(f"Failed to restart browser: {restart_error}")
-                raise RuntimeError("Failed to recover browser state")
+            except Exception as e:
+                logger.error(f"Failed to reload page: {str(e)}")
+                raise
 
     def stop_browser(self):
-        """
-        Stop the browser and cleanup resources.
-        """
+        """Stop the browser and clean up resources."""
         try:
             if self.browser:
                 self.browser.close()
-                self.browser = None
-                logger.info("Browser stopped.")
-            
             if self.playwright:
                 self.playwright.stop()
-                self.playwright = None
-                logger.info("Playwright stopped.")
-                
-            # Clear all references
-            self.context = None
+            self.browser = None
             self.page = None
+            self.playwright = None
+            self.current_page = None
+            logger.info("Browser stopped successfully")
         except Exception as e:
-            logger.error(f"Error stopping browser: {e}")
+            logger.error(f"Error stopping browser: {str(e)}")
             raise

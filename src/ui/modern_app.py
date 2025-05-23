@@ -8,7 +8,8 @@ from pathlib import Path
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QFileDialog, QComboBox, QMessageBox,
-    QProgressBar, QFrame, QScrollArea, QGroupBox, QCheckBox
+    QProgressBar, QFrame, QScrollArea, QGroupBox, QCheckBox,
+    QTabWidget
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSettings
 from PyQt6.QtGui import QFont, QIcon, QPalette, QColor
@@ -16,6 +17,7 @@ from ..core import AutoInput, BrowserManager
 from ..data import obs, ww, w1w2, ci, awan_lapisan, arah_angin, cm, ch, default_user_input, UserInputUpdater
 from ..utils import get_logger
 from ..auto_sender import AutoSender
+from .metar_tab import MetarTab
 import queue
 import time
 
@@ -49,11 +51,18 @@ class FileHandler:
             raise
 
 class PersistentWorkerThread(QThread):
+    """Worker thread for handling browser operations."""
+    
     progress = pyqtSignal(str)
     finished = pyqtSignal(str)
     error = pyqtSignal(str)
 
     def __init__(self, user_data_dir):
+        """Initialize the worker thread.
+        
+        Args:
+            user_data_dir: Directory for browser user data
+        """
         super().__init__()
         self.user_data_dir = user_data_dir
         self.command_queue = queue.Queue()
@@ -64,6 +73,7 @@ class PersistentWorkerThread(QThread):
         logger.info("PersistentWorkerThread initialized")
 
     def run(self):
+        """Main worker thread loop."""
         from ..core import BrowserManager
         while self.running:
             try:
@@ -75,8 +85,7 @@ class PersistentWorkerThread(QThread):
                         # Only start if not already running
                         if not self.auto_sender.state.is_running:
                             self.auto_sender.start()
-                            if self.progress_callback:
-                                self.progress.emit("Auto-send process started and waiting for next hour")
+                            self.progress.emit("Auto-send process started and waiting for next hour")
                     except Exception as e:
                         error_logger.error(f"Error in auto-send: {str(e)}")
                         self.error.emit(f"Error in auto-send: {str(e)}")
@@ -86,15 +95,18 @@ class PersistentWorkerThread(QThread):
 
             try:
                 if command == 'open':
-                    if self.browser_manager is None:
+                    if not self.browser_manager:
                         self.progress.emit("Opening browser...")
                         self.browser_manager = BrowserManager(user_data_dir=self.user_data_dir)
-                        self.browser_manager.start_browser()
-                        self.browser_manager.navigate_to_form()
-                        self.progress.emit("Browser opened and form loaded!")
+                        page_type = args.get('page_type', 'auto_input')
+                        self.browser_manager.start_browser(page_type)
+                        self.progress.emit("Browser opened and page loaded!")
                         self.finished.emit('open')
                     else:
-                        self.progress.emit("Browser already open.")
+                        # If browser is already open, navigate to the requested page
+                        page_type = args.get('page_type', 'auto_input')
+                        self.browser_manager.navigate_to_page(page_type)
+                        self.progress.emit("Browser already open, navigated to requested page.")
                         self.finished.emit('open')
                 elif command == 'fill':
                     user_input = args.get('user_input')
@@ -119,7 +131,7 @@ class PersistentWorkerThread(QThread):
                         self.error.emit("Browser not open. Please open the browser first.")
                         continue
                     self.progress.emit("Refreshing page...")
-                    self.browser_manager.page.reload()
+                    self.browser_manager.reload_page()
                     self.progress.emit("Page refreshed successfully!")
                     self.finished.emit('reload')
                 elif command == 'start_auto_send':
@@ -127,6 +139,8 @@ class PersistentWorkerThread(QThread):
                         error_logger.error("Browser not open when attempting to start auto-send")
                         self.error.emit("Browser not open. Please open the browser first.")
                         continue
+                    # Make sure we're on the auto_input page for auto-send
+                    self.browser_manager.navigate_to_page('auto_input')
                     from ..auto_sender import AutoSender
                     # Create new instance each time
                     self.auto_sender = AutoSender(
@@ -134,7 +148,7 @@ class PersistentWorkerThread(QThread):
                         progress_callback=self.progress.emit
                     )
                     self.auto_send_running = True
-                    self.progress.emit("Auto-send initialized and ready to start")
+                    self.progress.emit("Auto-send started")
                     self.finished.emit('start_auto_send')
                 elif command == 'stop_auto_send':
                     if self.auto_sender:
@@ -155,7 +169,12 @@ class PersistentWorkerThread(QThread):
                 self.error.emit(str(e))
 
     def send_command(self, command, args=None):
-        """Send a command to the worker thread."""
+        """Send a command to the worker thread.
+        
+        Args:
+            command: Command to execute
+            args: Optional arguments for the command
+        """
         if not self.running:
             return
         self.command_queue.put((command, args or {}))
@@ -184,13 +203,14 @@ class ModernApp(QMainWindow):
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
         
+        # Apply the existing stylesheet
         self.setStyleSheet("""
             QMainWindow {
                 background-color: #f0f0f0;
             }
             QGroupBox {
                 font-weight: bold;
-                border: 2px solid #1a237e;  /* BMKG Blue */
+                border: 2px solid #1a237e;
                 border-radius: 8px;
                 margin-top: 1ex;
                 padding: 15px;
@@ -200,7 +220,7 @@ class ModernApp(QMainWindow):
                 subcontrol-origin: margin;
                 left: 15px;
                 padding: 0 5px;
-                color: #1a237e;  /* BMKG Blue */
+                color: #1a237e;
             }
             QPushButton {
                 padding: 10px 20px;
@@ -209,7 +229,7 @@ class ModernApp(QMainWindow):
                 font-weight: bold;
             }
             QPushButton#primary {
-                background-color: #1a237e;  /* BMKG Blue */
+                background-color: #1a237e;
                 color: white;
                 border: none;
             }
@@ -217,12 +237,12 @@ class ModernApp(QMainWindow):
                 background-color: #283593;
             }
             QPushButton#primary:disabled {
-                background-color: #9e9e9e;  /* Grey */
+                background-color: #9e9e9e;
                 color: #e0e0e0;
                 border: none;
             }
             QPushButton#success {
-                background-color: #2e7d32;  /* Green */
+                background-color: #2e7d32;
                 color: white;
                 border: none;
             }
@@ -230,12 +250,12 @@ class ModernApp(QMainWindow):
                 background-color: #388e3c;
             }
             QPushButton#success:disabled {
-                background-color: #9e9e9e;  /* Grey */
+                background-color: #9e9e9e;
                 color: #e0e0e0;
                 border: none;
             }
             QPushButton#warning {
-                background-color: #f57c00;  /* Orange */
+                background-color: #f57c00;
                 color: white;
                 border: none;
             }
@@ -243,12 +263,12 @@ class ModernApp(QMainWindow):
                 background-color: #fb8c00;
             }
             QPushButton#warning:disabled {
-                background-color: #9e9e9e;  /* Grey */
+                background-color: #9e9e9e;
                 color: #e0e0e0;
                 border: none;
             }
             QPushButton:disabled {
-                background-color: #9e9e9e;  /* Grey */
+                background-color: #9e9e9e;
                 color: #e0e0e0;
                 border: none;
             }
@@ -284,6 +304,28 @@ class ModernApp(QMainWindow):
                 border-radius: 5px;
                 border: 1px solid #1a237e;
             }
+            QTabWidget::pane {
+                border: 2px solid #1a237e;
+                border-radius: 8px;
+                background-color: white;
+            }
+            QTabBar::tab {
+                background-color: #f0f0f0;
+                color: #1a237e;
+                padding: 10px 20px;
+                border: 2px solid #1a237e;
+                border-bottom: none;
+                border-top-left-radius: 5px;
+                border-top-right-radius: 5px;
+                margin-right: 2px;
+            }
+            QTabBar::tab:selected {
+                background-color: white;
+                border-bottom: none;
+            }
+            QTabBar::tab:hover {
+                background-color: #e3f2fd;
+            }
         """)
         
         # Initialize settings
@@ -312,6 +354,27 @@ class ModernApp(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
+        layout.setSpacing(20)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        # Create tab widget
+        self.tab_widget = QTabWidget()
+        self.tab_widget.currentChanged.connect(self.handle_tab_change)
+        
+        # Create and add Auto Input tab
+        self.auto_input_tab = QWidget()
+        self.setup_auto_input_tab()
+        self.tab_widget.addTab(self.auto_input_tab, "Auto Input")
+        
+        # Create and add METAR tab
+        self.metar_tab = MetarTab(self.browser_manager)
+        self.tab_widget.addTab(self.metar_tab, "METAR")
+        
+        layout.addWidget(self.tab_widget)
+
+    def setup_auto_input_tab(self):
+        """Set up the Auto Input tab UI."""
+        layout = QVBoxLayout(self.auto_input_tab)
         layout.setSpacing(20)
         layout.setContentsMargins(20, 20, 20, 20)
 
@@ -373,12 +436,11 @@ class ModernApp(QMainWindow):
         auto_send_group.setLayout(auto_send_layout)
         layout.addWidget(auto_send_group)
 
-
         # Run Auto Input button
         self.run_btn = QPushButton("Run Auto Input")
         self.run_btn.setObjectName("success")
         self.run_btn.clicked.connect(self.run_processing)
-        self.run_btn.setMinimumHeight(50)  # Make it bigger
+        self.run_btn.setMinimumHeight(50)
         layout.addWidget(self.run_btn)
 
         # Control buttons group
@@ -398,11 +460,10 @@ class ModernApp(QMainWindow):
         control_group.setLayout(control_layout)
         layout.addWidget(control_group)
 
-                # Progress group
-        progress_group = QGroupBox("Progress")
+        # Progress group
+        progress_group = QGroupBox("Status")
         progress_layout = QVBoxLayout()
         
-        # Status label
         self.status_label = QLabel("Ready")
         self.status_label.setObjectName("progressLabel")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -509,8 +570,19 @@ class ModernApp(QMainWindow):
         self.hour_selected = index
 
     def open_browser(self):
-        self.worker_thread.send_command('open')
-        self.disable_all_buttons()
+        """Open the browser for the current tab."""
+        try:
+            # Get the current tab index
+            current_index = self.tab_widget.currentIndex()
+            page_type = 'auto_input' if current_index == 0 else 'metar'
+            
+            self.disable_all_buttons()
+            self.status_label.setText("Opening browser...")
+            self.worker_thread.send_command('open', {'page_type': page_type})
+            
+        except Exception as e:
+            logger.error(f"Error opening browser: {e}")
+            QMessageBox.critical(self, "Error", f"Error opening browser: {str(e)}")
 
     def reload_browser(self):
         self.worker_thread.send_command('reload')
@@ -569,11 +641,14 @@ class ModernApp(QMainWindow):
         QMessageBox.critical(self, "Error", f"Proses gagal: {error_message}")
         self.update_button_states()
 
-    def update_status(self, message):
+    def update_status(self, message: str):
         """Update the status label with the given message."""
         if hasattr(self, 'status_label'):
             self.status_label.setText(message)
             logger.info(message)
+        # Also update METAR tab status if it exists
+        if hasattr(self, 'metar_tab'):
+            self.metar_tab.update_status(message)
 
     def update_button_states(self):
         """Update the state of all buttons based on current conditions."""
@@ -591,6 +666,30 @@ class ModernApp(QMainWindow):
         auto_sender_running = self.worker_thread.auto_send_running if hasattr(self.worker_thread, 'auto_send_running') else False
         self.start_auto_send_btn.setEnabled(self.browser_opened and not auto_sender_running)
         self.stop_auto_send_btn.setEnabled(auto_sender_running)
+
+    def handle_tab_change(self, index):
+        """Handle tab change events.
+        
+        Args:
+            index: Index of the selected tab
+        """
+        try:
+            if not self.browser_manager or not self.browser_manager.page:
+                return
+                
+            # Map tab index to page type
+            page_types = {
+                0: 'auto_input',
+                1: 'metar'
+            }
+            
+            page_type = page_types.get(index)
+            if page_type:
+                self.browser_manager.navigate_to_page(page_type)
+                
+        except Exception as e:
+            logger.error(f"Error handling tab change: {e}")
+            QMessageBox.critical(self, "Error", f"Error switching tabs: {str(e)}")
 
 def main():
     """Run the application."""
