@@ -1,85 +1,115 @@
-# BMKG Auto Input
+# AutoInput-BMKGsoftV2
 
-Aplikasi otomatisasi input data untuk BMKGSoftV2 menggunakan Python dan PyQt6.
+A modern automated data input application for BMKG Satu platform, built with PyQt6 and Playwright.
 
-## Deskripsi
+## Features
 
-Aplikasi ini dirancang untuk membantu proses input (excel) data ke sistem BMKGSoft secara otomatis. Aplikasi ini menggunakan PyQt6 untuk Ui dan Playwright untuk otomatisasi browser.
+- Modern PyQt6-based user interface with a clean, professional design
+- Automated data input for BMKG Satu platform
+- METAR code processing and submission
+- Browser automation using Playwright
+- Multi-threaded processing for responsive UI
+- Configurable logging system
+- Auto-sending capability for periodic data submission
+- Support for Excel/CSV file input
+- Customizable UI themes and settings
 
-## Fitur
+## Requirements
 
-- Ui update (bukan tk sprt prev version) dan mudah digunakan
-- Otomatisasi input data ke form BMKG
-- Dukungan untuk file Excel (.xls, .xlsx)
-- Pemilihan waktu observasi yang fleksibel
-- Manajemen browser yang persisten
-
-## Persyaratan Sistem
-
-- Python 3.8 atau lebih baru
+- Python 3.9 or higher
 - PyQt6
 - Playwright
-- Microsoft Excel (untuk membuka file input)
+- Other dependencies (see requirements.txt)
 
-## Instalasi
+## Installation
 
-1. Clone repositori ini:
+1. Clone the repository:
 ```bash
-git clone https://github.com/username/BMKG-AutoInput.git
-cd BMKG-AutoInput
+git clone https://github.com/yourusername/AutoInput-BMKGsoftV2.git
+cd AutoInput-BMKGsoftV2
 ```
 
-2. Buat dan aktifkan virtual environment (opsional tapi direkomendasikan):
+2. Create a virtual environment (recommended):
 ```bash
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
-venv\Scripts\activate     # Windows
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-3. Install dependensi:
+3. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Install browser yang diperlukan untuk Playwright:
+4. Install Playwright browsers:
 ```bash
 playwright install
 ```
 
-## Penggunaan
+## Usage
 
-1. Jalankan aplikasi:
+1. Run the application:
 ```bash
-python run.py
+python -m src.ui.modern_app
 ```
 
-2. Klik "Buka Browser" untuk memulai browser
-3. Pilih file Excel yang berisi data input
-4. Pilih waktu observasi
-5. Klik "Jalankan" untuk memulai proses input otomatis
+2. Select the input file (Excel/CSV format)
+3. Choose the observation hour
+4. Click "Open Browser" to start the browser session
+5. Click "Run Auto Input" to begin processing
 
-## Struktur Proyek
+## Configuration
+
+The application can be configured through the `config/config.yaml` file, which includes settings for:
+
+- Browser behavior
+- UI customization
+- Logging
+- Automation parameters
+- Security settings
+- Monitoring options
+
+## Project Structure
 
 ```
-BMKG-AutoInput/
+AutoInput-BMKGsoftV2/
 ├── src/
-│   ├── core/           # Komponen inti aplikasi
-│   ├── data/           # Data dan konfigurasi
-│   ├── ui/             # Antarmuka pengguna
-│   └── utils/          # Utilitas
-├── legacy/             # Kode lama (untuk referensi)
-├── run.py             # Entry point aplikasi
-└── README.md          # Dokumentasi
+│   ├── core/           # Core functionality
+│   ├── ui/             # User interface components
+│   ├── utils/          # Utility functions
+│   └── data/           # Data handling
+├── config/             # Configuration files
+├── logs/               # Log files
+├── tests/              # Test files
+└── requirements.txt    # Project dependencies
 ```
 
-## Kontribusi
+## Development
 
-Silakan buat pull request untuk kontribusi. Untuk perubahan besar, harap buka issue terlebih dahulu untuk mendiskusikan perubahan yang diinginkan.
+To contribute to the project:
 
-## Lisensi
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests:
+```bash
+pytest
+```
+5. Submit a pull request
 
-[MIT](https://choosealicense.com/licenses/mit/)
+## Logging
 
-## Kontak
+The application uses a comprehensive logging system with different log files:
 
-Untuk pertanyaan dan dukungan, silakan hubungi pengembang. 
+- `app.log`: General application logs
+- `browser.log`: Browser automation logs
+- `error.log`: Error-specific logs
+
+Logs are automatically rotated to prevent excessive disk usage.
+
+## Author
+
+- Zulkifli Ramadhan (zulkiflirmdn@gmail.com)
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details. 

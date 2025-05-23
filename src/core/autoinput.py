@@ -1,4 +1,5 @@
 import re
+import time
 from datetime import datetime, timezone
 from ..utils import get_logger
 
@@ -77,10 +78,17 @@ class AutoInput:
 
             # Tanggal Pengamatan
             today = datetime.now(timezone.utc)
-            tgl_harini = f"/{today.month}/{today.year} (Today)"
-            page.locator("#input-datepicker__value_").click()
-            page.get_by_label(tgl_harini).click()
-            # page.get_by_label("18/9/").click()
+            input_date = user_input.get('tanggal_pengamatan')
+            
+            if input_date:
+                # If specific date is provided, use it (format: DD/MM)
+                page.locator("#input-datepicker__value_").click()
+                page.get_by_label(f"{input_date}/").click()
+            else:
+                # Use today's date as default
+                tgl_harini = f"/{today.month}/{today.year} (Today)"
+                page.locator("#input-datepicker__value_").click()
+                page.get_by_label(tgl_harini).click()
 
             # 1 Jam Pengamatan
             page.locator("#input-jam div").nth(1).click()
@@ -334,6 +342,7 @@ class AutoInput:
             page.locator("#land_cond").get_by_role("textbox").press("Enter")
 
             # Preview
+            time.sleep(1)
             page.get_by_role("button", name="Preview").click()
 
             print("Proses Selesai.")

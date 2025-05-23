@@ -108,6 +108,33 @@ class PersistentWorkerThread(QThread):
                         self.browser_manager.navigate_to_page(page_type)
                         self.progress.emit("Browser already open, navigated to requested page.")
                         self.finished.emit('open')
+                elif command == 'process_metar':
+                    if not self.browser_manager:
+                        error_logger.error("Browser not open when attempting to process METAR")
+                        self.error.emit("Browser not open. Please open the browser first.")
+                        continue
+                        
+                    metar_data = args.get('metar_data')
+                    if not metar_data:
+                        self.error.emit("No METAR data provided")
+                        continue
+                        
+                    self.progress.emit("Processing METAR data...")
+                    try:
+                        from ..core.metar_processor import MetarProcessor
+                        processor = MetarProcessor(self.browser_manager.page)
+                        processor.fill_form(metar_data)
+                        self.progress.emit("METAR processed successfully!")
+                        self.finished.emit('process_metar')
+                    except PlaywrightTimeoutError as e:
+                        error_msg = f"Timeout while processing METAR: {str(e)}"
+                        error_logger.warning(error_msg)  # Use warning instead of error for timeouts
+                        self.error.emit(error_msg)
+                        # Don't raise the error - let the UI handle it gracefully
+                    except Exception as e:
+                        error_msg = f"Error processing METAR: {str(e)}"
+                        error_logger.error(error_msg)
+                        self.error.emit(error_msg)
                 elif command == 'fill':
                     user_input = args.get('user_input')
                     if self.browser_manager is None:
@@ -616,6 +643,9 @@ class ModernApp(QMainWindow):
         """Handle worker thread completion."""
         if action == 'open':
             self.browser_opened = True
+            # Sync the browser manager with METAR tab
+            if hasattr(self, 'metar_tab'):
+                self.metar_tab.browser_manager = self.worker_thread.browser_manager
             self.status_label.setText("Browser opened and ready!")
             QMessageBox.information(self, "Sukses", "Browser dibuka dan siap digunakan!")
         elif action == 'fill':
@@ -631,6 +661,8 @@ class ModernApp(QMainWindow):
             QMessageBox.information(self, "Sukses", "Auto-send berhasil dihentikan!")
         elif action == 'close':
             self.browser_opened = False
+            if hasattr(self, 'metar_tab'):
+                self.metar_tab.browser_manager = None
             self.status_label.setText("Browser closed.")
             QMessageBox.information(self, "Info", "Browser ditutup.")
         self.update_button_states()

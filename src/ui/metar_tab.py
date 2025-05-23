@@ -9,6 +9,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 import logging
 from ..core.metar_reader import MetarReader
 from ..core.metar_processor import MetarProcessor
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,10 @@ class MetarTab(QWidget):
         layout.addWidget(input_group)
 
         # Control buttons group
+        reminder_text = (
+            "Pastika Kamu Sudah Berada Pada Halaman METAR \n"
+            "https://bmkgsatu.bmkg.go.id/meteorologi/metarspeci"
+        )
         control_group = QGroupBox("Controls")
         control_layout = QHBoxLayout()
         
@@ -64,7 +69,11 @@ class MetarTab(QWidget):
         self.process_btn.clicked.connect(self.process_metar)
         self.process_btn.setMinimumHeight(50)
         control_layout.addWidget(self.process_btn)
-        
+
+        reminder_text = QLabel(reminder_text)
+        reminder_text.setStyleSheet("color: #666666;")
+        input_layout.addWidget(reminder_text)
+
         control_group.setLayout(control_layout)
         layout.addWidget(control_group)
 
@@ -83,6 +92,12 @@ class MetarTab(QWidget):
         # Add stretch to push everything to the top
         layout.addStretch()
 
+    def reset_to_initial_state(self):
+        """Reset the UI to its initial state."""
+        self.process_btn.setEnabled(True)
+        self.status_label.setText("Ready for next METAR input")
+        # Don't clear the input text to allow the user to retry with the same METAR
+
     def process_metar(self):
         """Process the entered METAR code."""
         try:
@@ -96,33 +111,61 @@ class MetarTab(QWidget):
             reader = MetarReader(metar_code)
             metar_data = reader.parse()
 
-            # Check if browser is available
-            if not self.browser_manager or not self.browser_manager.page:
-                QMessageBox.warning(self, "Browser Not Ready", "Please open the browser first.")
+            # Get the worker thread from the parent window
+            parent_window = self.window()
+            if not parent_window or not hasattr(parent_window, 'worker_thread'):
+                QMessageBox.warning(self, "Error", "Could not access worker thread.")
+                self.reset_to_initial_state()
                 return
 
-            # Process the METAR data
-            self.status_label.setText("Processing METAR data...")
-            processor = MetarProcessor(self.browser_manager.page)
-            processor.fill_form(metar_data)
+            # Disable the process button while processing
+            self.process_btn.setEnabled(False)
 
-            # Update status
-            self.status_label.setText("METAR processed successfully!")
-            QMessageBox.information(self, "Success", "METAR code processed successfully!")
+            # Send the METAR processing command to the worker thread
+            parent_window.worker_thread.send_command('process_metar', {'metar_data': metar_data})
 
         except ValueError as e:
             logger.error(f"Invalid METAR code: {e}")
             QMessageBox.critical(self, "Error", f"Invalid METAR code: {str(e)}")
-            self.status_label.setText("Error: Invalid METAR code")
+            self.reset_to_initial_state()
+        except PlaywrightTimeoutError as e:
+            logger.warning(f"Timeout occurred while processing METAR: {e}")
+            self.status_label.setText("Timeout occurred - system ready for next input")
+            self.reset_to_initial_state()
         except Exception as e:
             logger.error(f"Error processing METAR: {e}")
             QMessageBox.critical(self, "Error", f"Error processing METAR: {str(e)}")
-            self.status_label.setText("Error processing METAR")
+            self.reset_to_initial_state()
 
     def update_status(self, message: str):
-        """Update the status label.
+        """Update the status label with a message.
         
         Args:
             message: Status message to display
         """
-        self.status_label.setText(message) 
+        self.status_label.setText(message)
+        logger.info(message)
+        
+        # Handle different message types
+        if "METAR processed successfully" in message:
+            self.process_btn.setEnabled(True)
+            self.metar_input.clear()  # Clear input after successful processing
+        elif "Error" in message or "Timeout" in message:
+            # Show a more user-friendly message for timeouts
+            if "Timeout" in message:
+                QMessageBox.warning(
+                    self,
+                    "Timeout Error",
+                    "The operation timed out. The system has been reset and is ready for your next METAR input.\n\n"
+                    "You can try again with the same METAR code."
+                )
+            self.reset_to_initial_state() 
+            # Show a more user-friendly message for timeouts
+            if "Timeout" in message:
+                QMessageBox.warning(
+                    self,
+                    "Timeout Error",
+                    "The operation timed out. The system has been reset and is ready for your next METAR input.\n\n"
+                    "You can try again with the same METAR code."
+                )
+            self.reset_to_initial_state() 
