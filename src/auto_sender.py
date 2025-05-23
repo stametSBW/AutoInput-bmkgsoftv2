@@ -1,57 +1,101 @@
 import time
 from datetime import datetime, timezone, timedelta
-from playwright.sync_api import Playwright, sync_playwright
+from typing import Optional, Callable, Any, Dict
+from playwright.sync_api import Playwright, sync_playwright, Page
 import re
-from src.data.sandi import obs
-from src.data import default_user_input
-from src.utils import get_logger
+import logging
+from dataclasses import dataclass
+
+from .data.sandi import obs
+from .data import default_user_input
+from .utils import get_logger
+from .exceptions import (
+    AutoSenderError, PageLoadError, FormFillError,
+    FormSubmitError, NetworkError, ConfigurationError
+)
+from .utils.retry import with_retry, ErrorTracker
+from .config import AutoSenderConfig, RetryConfig, NetworkConfig
 
 logger = get_logger(__name__)
 
-class AutoSender:
-    def __init__(self, page=None, headless=False):
-        self.headless = headless
-        self.is_running = False
-        self.page = page
-        self.browser = None
-        self.context = None
-        self.last_run_hour = None
-        self.user_input = default_user_input.copy()
-        logger.info("AutoSender initialized")
+@dataclass
+class AutoSenderState:
+    """Class to track AutoSender state."""
+    is_running: bool = False
+    first_run: bool = True
+    last_run_hour: Optional[int] = None
+    error_tracker: ErrorTracker = ErrorTracker()
 
-    def get_next_full_hour(self):
+class AutoSender:
+    def __init__(
+        self,
+        page: Optional[Page] = None,
+        config: Optional[AutoSenderConfig] = None,
+        progress_callback: Optional[Callable[[str], None]] = None
+    ):
+        """
+        Initialize AutoSender with configuration and optional page.
+        
+        Args:
+            page: Optional Playwright page instance
+            config: Optional configuration object
+            progress_callback: Optional callback for progress updates
+        """
+        self.config = config or AutoSenderConfig()
+        self.page = page
+        self.state = AutoSenderState()
+        self.progress_callback = progress_callback
+        self.user_input = default_user_input.copy()
+        logger.info("AutoSender initialized with configuration")
+
+    def get_next_full_hour(self) -> datetime:
         """Calculate the next full hour from current time."""
         now = datetime.now()
         next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
         return next_hour
 
-    def wait_until_next_hour(self):
-        """Wait until the next full hour."""
+    def wait_until_next_hour(self) -> None:
+        """Wait until the next full hour with progress updates."""
         next_hour = self.get_next_full_hour()
         wait_seconds = (next_hour - datetime.now()).total_seconds()
+        
         if wait_seconds > 0:
-            logger.info(f"Waiting {wait_seconds:.0f} seconds until {next_hour.strftime('%H:%M')}")
+            message = f"Waiting {wait_seconds:.0f} seconds until {next_hour.strftime('%H:%M')}"
+            logger.info(message)
+            if self.progress_callback:
+                self.progress_callback(message)
             time.sleep(wait_seconds)
 
-    def wait_for_element(self, selector, timeout=10000, retries=5):
+    @with_retry(
+        max_retries=5,
+        initial_delay=1.0,
+        max_delay=30.0,
+        backoff_factor=2.0,
+        exceptions=(PageLoadError, NetworkError)
+    )
+    def wait_for_element(self, selector: str, timeout: int = 10000) -> bool:
         """Wait for element with improved retry mechanism."""
-        attempt = 0
-        while attempt < retries:
-            try:
-                self.page.wait_for_selector(selector, timeout=timeout, state="visible")
-                logger.debug(f"Element '{selector}' found and visible")
-                return True
-            except Exception as e:
-                attempt += 1
-                logger.warning(f"Attempt {attempt}/{retries}: Element '{selector}' not found")
-                if attempt == retries:
-                    logger.error(f"Failed to find element '{selector}' after {retries} attempts")
-                    raise e
-                time.sleep(2)
+        try:
+            self.page.wait_for_selector(selector, timeout=timeout, state="visible")
+            logger.debug(f"Element '{selector}' found and visible")
+            return True
+        except Exception as e:
+            raise PageLoadError(f"Failed to find element '{selector}'", e)
 
-    def fill_form(self, current_hour):
+    @with_retry(
+        max_retries=3,
+        initial_delay=2.0,
+        max_delay=20.0,
+        backoff_factor=2.0,
+        exceptions=(FormFillError, NetworkError)
+    )
+    def fill_form(self, current_hour: int) -> bool:
         """Fill the form with required data."""
         try:
+            # Reload page
+            self.page.reload()
+            self.page.wait_for_load_state("networkidle")
+
             # Select station
             logger.debug("Selecting station...")
             self.page.locator("#select-station div").nth(1).click()
@@ -83,10 +127,17 @@ class AutoSender:
 
             return True
         except Exception as e:
-            logger.error(f"Error filling form: {str(e)}")
-            return False
+            self.state.error_tracker.log_error("form_fill", e)
+            raise FormFillError(f"Error filling form: {str(e)}", e)
 
-    def submit_form(self):
+    @with_retry(
+        max_retries=3,
+        initial_delay=2.0,
+        max_delay=20.0,
+        backoff_factor=2.0,
+        exceptions=(FormSubmitError, NetworkError)
+    )
+    def submit_form(self) -> bool:
         """Submit the form and send data."""
         try:
             logger.info("Starting data submission process...")
@@ -105,10 +156,17 @@ class AutoSender:
             logger.info("Data sent successfully!")
             return True
         except Exception as e:
-            logger.error(f"Error submitting form: {str(e)}")
-            return False
+            self.state.error_tracker.log_error("form_submit", e)
+            raise FormSubmitError(f"Error submitting form: {str(e)}", e)
 
-    def handle_page_error(self):
+    @with_retry(
+        max_retries=3,
+        initial_delay=2.0,
+        max_delay=20.0,
+        backoff_factor=2.0,
+        exceptions=(NetworkError, PageLoadError)
+    )
+    def handle_page_error(self) -> bool:
         """Handle page errors and attempt recovery."""
         try:
             logger.debug("Attempting to reload page...")
@@ -116,90 +174,139 @@ class AutoSender:
             self.page.wait_for_load_state("networkidle")
             return True
         except Exception as e:
-            logger.error(f"Error reloading page: {str(e)}")
+            self.state.error_tracker.log_error("page_reload", e)
             try:
                 logger.debug("Attempting to access page again...")
-                self.page.goto("https://bmkgsatu.bmkg.go.id/meteorologi/sinoptik")
+                self.page.goto(self.config.base_url)
                 self.page.wait_for_load_state("networkidle")
                 return True
             except Exception as goto_error:
-                logger.error(f"Error accessing page: {str(goto_error)}")
-                return False
+                self.state.error_tracker.log_error("page_access", goto_error)
+                raise NetworkError(f"Failed to recover page: {str(goto_error)}", goto_error)
 
-    def start(self):
-        """Start the auto-send process."""
+    def start(self) -> None:
+        """Start the auto-send process with enhanced error handling and logging."""
         if not self.page:
-            logger.error("No browser page provided")
-            raise ValueError("No browser page provided. Please open the browser first.")
-            
-        self.is_running = True
+            raise ConfigurationError("No browser page provided")
+
+        # Reset state before starting
+        self.state = AutoSenderState()
+        self.state.is_running = True
         logger.info("Auto-send process started")
         
+        if self.progress_callback:
+            self.progress_callback("Auto-send process started")
+        
         try:
-            while self.is_running:
+            while self.state.is_running:
                 try:
                     # Wait until next full hour first
+                    if self.progress_callback:
+                        next_hour = self.get_next_full_hour()
+                        self.progress_callback(f"Waiting until next hour ({next_hour.strftime('%H:%M')})")
+                    
                     self.wait_until_next_hour()
                     
-                    if not self.is_running:
+                    if not self.state.is_running:
+                        logger.info("Auto-send process stopped during wait")
+                        if self.progress_callback:
+                            self.progress_callback("Auto-send process stopped during wait")
                         break
 
                     # Get the current hour AFTER waiting for the next full hour
                     current_time = datetime.now()
                     current_hour = current_time.hour
                     
+                    if self.progress_callback:
+                        self.progress_callback(f"Processing data for hour {current_hour}:00")
+                    
+                    # If this is the first run, reload the page before starting
+                    if self.state.first_run:
+                        logger.info("First run detected - reloading page to ensure fresh start")
+                        if self.progress_callback:
+                            self.progress_callback("First run - reloading page")
+                        self.page.reload()
+                        self.page.wait_for_load_state("networkidle")
+                        self.state.first_run = False
+                    
                     logger.info(f"Starting data submission for hour {current_hour}:00")
                     
                     # Fill and submit form
                     if self.fill_form(current_hour) and self.submit_form():
-                        self.last_run_hour = current_hour
-                        logger.info(f"Completed at {current_hour}:00. Waiting for next hour.")
+                        self.state.last_run_hour = current_hour
+                        success_msg = f"Data submitted successfully for {current_hour}:00"
+                        logger.info(success_msg)
+                        if self.progress_callback:
+                            self.progress_callback(success_msg)
                         
                         # Wait 2 minutes before reloading
-                        logger.debug("Waiting 2 minutes before reload...")
+                        if self.progress_callback:
+                            self.progress_callback("Waiting 2 minutes before reload...")
                         time.sleep(2 * 60)
                         
                         # Always reload the page after 2 minutes
-                        logger.debug("Reloading page...")
+                        if self.progress_callback:
+                            self.progress_callback("Reloading page...")
                         try:
                             self.page.reload()
                             self.page.wait_for_load_state("networkidle")
-                            logger.debug("Page reloaded successfully")
+                            if self.progress_callback:
+                                self.progress_callback("Page reloaded successfully")
                         except Exception as e:
-                            logger.error(f"Error reloading page: {str(e)}")
-                            # If reload fails, try to access the page again
-                            try:
-                                logger.debug("Attempting to access page again...")
-                                self.page.goto("https://bmkgsatu.bmkg.go.id/meteorologi/sinoptik")
-                                self.page.wait_for_load_state("networkidle")
-                                logger.debug("Page accessed successfully")
-                            except Exception as goto_error:
-                                logger.error(f"Error accessing page: {str(goto_error)}")
-                                time.sleep(300)  # Wait 5 minutes if both reload and access fail
+                            self.state.error_tracker.log_error("page_reload", e)
+                            if self.progress_callback:
+                                self.progress_callback(f"Error reloading page: {str(e)}")
+                            self.handle_page_error()
                     else:
-                        logger.error("Form submission failed")
+                        error_msg = "Form submission failed"
+                        logger.error(error_msg)
+                        if self.progress_callback:
+                            self.progress_callback(error_msg)
                         time.sleep(60)
 
                 except Exception as e:
-                    logger.error(f"Error in auto-send iteration: {str(e)}")
-                    if self.is_running:
-                        logger.warning("Retrying in 1 minute...")
+                    self.state.error_tracker.log_error("main_loop", e)
+                    error_msg = f"Error in auto-send: {str(e)}"
+                    if self.progress_callback:
+                        self.progress_callback(error_msg)
+                    if self.state.is_running:
+                        retry_msg = "Retrying in 1 minute..."
+                        logger.warning(retry_msg)
+                        if self.progress_callback:
+                            self.progress_callback(retry_msg)
                         time.sleep(60)
                         try:
                             self.page.reload()
                             self.page.wait_for_load_state("networkidle")
                         except Exception as reload_error:
-                            logger.error(f"Error reloading page: {str(reload_error)}")
+                            self.state.error_tracker.log_error("page_reload", reload_error)
+                            if self.progress_callback:
+                                self.progress_callback(f"Error reloading page: {str(reload_error)}")
                             time.sleep(300)
 
         except Exception as e:
-            logger.error(f"Fatal error in auto-send process: {str(e)}")
+            self.state.error_tracker.log_error("fatal_error", e)
+            fatal_error_msg = f"Fatal error in auto-send process: {str(e)}"
+            logger.error(fatal_error_msg)
+            if self.progress_callback:
+                self.progress_callback(fatal_error_msg)
         finally:
             self.stop()
 
-    def stop(self):
-        """Stop the auto-send process."""
-        self.is_running = False
-        self.last_run_hour = None
-        logger.info("Auto-send process stopped")
-        self.page = None
+    def stop(self) -> None:
+        """Stop the auto-send process and log final statistics."""
+        if self.state.is_running:
+            logger.info("Stopping auto-send process...")
+            self.state.is_running = False
+            
+            # Log final error statistics
+            error_summary = self.state.error_tracker.get_error_summary()
+            logger.info(f"Final error statistics: {error_summary}")
+            
+            # Reset state but keep page reference
+            self.state = AutoSenderState()
+            
+            if self.progress_callback:
+                self.progress_callback("Auto-send process stopped")
+            
+            logger.info("Auto-send process stopped")

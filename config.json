@@ -1,0 +1,17 @@
+{
+    "headless": false,
+    "retry": {
+        "max_retries": 5,
+        "initial_delay": 1.0,
+        "max_delay": 60.0,
+        "backoff_factor": 2.0
+    },
+    "network": {
+        "page_load_timeout": 30000,
+        "navigation_timeout": 30000,
+        "retry_interval": 60,
+        "max_network_retries": 3
+    },
+    "log_level": "INFO",
+    "base_url": "https://bmkgsatu.bmkg.go.id/meteorologi/sinoptik"
+} 

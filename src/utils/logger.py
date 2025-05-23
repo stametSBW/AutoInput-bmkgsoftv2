@@ -138,17 +138,15 @@ class LogConfig:
 
 def get_logger(name: str) -> logging.Logger:
     """
-    Get a logger instance with the specified name.
+    Get or create a logger instance.
     
     Args:
-        name: The name of the logger to get.
-        
+        name: Name of the logger
+    
     Returns:
-        A configured logger instance.
+        logging.Logger: Logger instance
     """
-    logger = logging.getLogger(name)
-    logger.propagate = True  # Ensure propagation to root logger
-    return logger
+    return logging.getLogger(name)
 
 def setup_logging(log_dir: Optional[str] = None) -> LogConfig:
     """
@@ -164,3 +162,47 @@ def setup_logging(log_dir: Optional[str] = None) -> LogConfig:
 
 # Initialize logging when module is imported
 log_config = setup_logging() 
+
+def setup_logger(name: str, log_level: str = "INFO", log_file: Optional[str] = None) -> logging.Logger:
+    """
+    Set up a logger with proper configuration.
+    
+    Args:
+        name: Name of the logger
+        log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        log_file: Optional path to log file
+    
+    Returns:
+        logging.Logger: Configured logger instance
+    """
+    logger = logging.getLogger(name)
+    
+    # Set log level
+    level = getattr(logging, log_level.upper(), logging.INFO)
+    logger.setLevel(level)
+    
+    # Create formatters
+    detailed_formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    # Add console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(detailed_formatter)
+    logger.addHandler(console_handler)
+    
+    # Add file handler if log_file is specified
+    if log_file:
+        # Create logs directory if it doesn't exist
+        log_dir = Path("logs")
+        log_dir.mkdir(exist_ok=True)
+        
+        # Create log file with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d")
+        file_handler = logging.FileHandler(
+            log_dir / f"{log_file}_{timestamp}.log"
+        )
+        file_handler.setFormatter(detailed_formatter)
+        logger.addHandler(file_handler)
+    
+    return logger 

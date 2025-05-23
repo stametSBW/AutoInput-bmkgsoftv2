@@ -1,3 +1,18 @@
+"""
+BMKG code mappings and default configurations.
+"""
+
+# Observer mappings
+obs = {
+    "zulkifli": "Zulkifli Ramadhan",
+    "adw": "Angga Dwi Wibowo",
+    "dwi": "Dwi Harjanto",
+    "risna": "Ni Putu Risna Purwandari",
+    "fajar": "Fajaruddin Ash Shiddiq",
+    "titis": "Titis Wicaksono",
+    "hudan": "Hudan Pulung Hanasti"
+}
+# Default user input configuration
 default_user_input = {
     'obs_onduty': 'titis',
     'jam_pengamatan': '23',
@@ -339,14 +354,4 @@ elevasi = {
     7: 7,
     6: 8,
     5: 9
-}
-
-obs = {
-    "ramadhan": "Zulkifli Ramadhan",
-    "adw": "Angga Dwi Wibowo",
-    "dwi": "Dwi Harjanto",
-    "risna": "Ni Putu Risna Purwandari",
-    "fajar": "Fajaruddin Ash Shiddiq",
-    "titis": "Titis Wicaksono",
-    "hudan": "Hudan Pulung Hanasti"
 }

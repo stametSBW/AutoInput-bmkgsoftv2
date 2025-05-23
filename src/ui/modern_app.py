@@ -17,9 +17,11 @@ from ..data import obs, ww, w1w2, ci, awan_lapisan, arah_angin, cm, ch, default_
 from ..utils import get_logger
 from ..auto_sender import AutoSender
 import queue
+import time
 
 # Configure logging
 logger = get_logger(__name__)
+error_logger = get_logger('error')  # Get the error-specific logger
 
 class FileHandler:
     """Handles file operations and validation."""
@@ -28,17 +30,23 @@ class FileHandler:
     def validate_file_path(file_path: str) -> None:
         """Validate if the file path exists and is accessible."""
         if not file_path or not os.path.exists(file_path):
+            error_logger.error(f"File not found: {file_path}")
             raise FileNotFoundError(f"File {file_path} not found.")
         
         if not os.access(file_path, os.R_OK):
+            error_logger.error(f"No permission to read file: {file_path}")
             raise PermissionError(f"No permission to read file: {file_path}")
 
     @staticmethod
     def ensure_directory_exists(directory: str) -> str:
         """Ensure the directory exists, create if it doesn't."""
-        path = Path(directory)
-        path.mkdir(parents=True, exist_ok=True)
-        return str(path)
+        try:
+            path = Path(directory)
+            path.mkdir(parents=True, exist_ok=True)
+            return str(path)
+        except Exception as e:
+            error_logger.error(f"Failed to create directory {directory}: {str(e)}")
+            raise
 
 class PersistentWorkerThread(QThread):
     progress = pyqtSignal(str)
@@ -53,6 +61,7 @@ class PersistentWorkerThread(QThread):
         self.running = True
         self.auto_sender = None
         self.auto_send_running = False
+        logger.info("PersistentWorkerThread initialized")
 
     def run(self):
         from ..core import BrowserManager
@@ -63,10 +72,16 @@ class PersistentWorkerThread(QThread):
                 # Check if auto-send is running and needs to continue
                 if self.auto_send_running and self.auto_sender:
                     try:
-                        self.auto_sender.start()
+                        # Only start if not already running
+                        if not self.auto_sender.state.is_running:
+                            self.auto_sender.start()
+                            if self.progress_callback:
+                                self.progress.emit("Auto-send process started and waiting for next hour")
                     except Exception as e:
+                        error_logger.error(f"Error in auto-send: {str(e)}")
                         self.error.emit(f"Error in auto-send: {str(e)}")
                         self.auto_send_running = False
+                        self.auto_sender = None
                 continue
 
             try:
@@ -84,6 +99,7 @@ class PersistentWorkerThread(QThread):
                 elif command == 'fill':
                     user_input = args.get('user_input')
                     if self.browser_manager is None:
+                        error_logger.error("Browser not open when attempting to fill form")
                         self.error.emit("Browser not open. Please open the browser first.")
                         continue
                     self.progress.emit("Filling form...")
@@ -99,6 +115,7 @@ class PersistentWorkerThread(QThread):
                     self.finished.emit('fill')
                 elif command == 'reload':
                     if self.browser_manager is None:
+                        error_logger.error("Browser not open when attempting to reload")
                         self.error.emit("Browser not open. Please open the browser first.")
                         continue
                     self.progress.emit("Refreshing page...")
@@ -107,34 +124,54 @@ class PersistentWorkerThread(QThread):
                     self.finished.emit('reload')
                 elif command == 'start_auto_send':
                     if self.browser_manager is None:
+                        error_logger.error("Browser not open when attempting to start auto-send")
                         self.error.emit("Browser not open. Please open the browser first.")
                         continue
                     from ..auto_sender import AutoSender
-                    self.auto_sender = AutoSender(page=self.browser_manager.page)
+                    # Create new instance each time
+                    self.auto_sender = AutoSender(
+                        page=self.browser_manager.page,
+                        progress_callback=self.progress.emit
+                    )
                     self.auto_send_running = True
-                    self.progress.emit("Auto-send started")
+                    self.progress.emit("Auto-send initialized and ready to start")
                     self.finished.emit('start_auto_send')
                 elif command == 'stop_auto_send':
+                    if self.auto_sender:
+                        self.auto_sender.stop()
+                        self.auto_sender = None
                     self.auto_send_running = False
-                    self.auto_sender = None
                     self.progress.emit("Auto-send stopped")
                     self.finished.emit('stop_auto_send')
                 elif command == 'close':
                     if self.browser_manager:
-                        self.browser_manager.close_browser()
+                        self.browser_manager.stop_browser()
                         self.browser_manager = None
                     self.running = False
                     self.progress.emit("Browser closed.")
                     self.finished.emit('close')
             except Exception as e:
-                import traceback
-                traceback.print_exc()
+                error_logger.error(f"Error in worker thread: {str(e)}", exc_info=True)
                 self.error.emit(str(e))
 
     def send_command(self, command, args=None):
-        if args is None:
-            args = {}
-        self.command_queue.put((command, args))
+        """Send a command to the worker thread."""
+        if not self.running:
+            return
+        self.command_queue.put((command, args or {}))
+
+    def cleanup(self):
+        """Clean up resources before thread termination."""
+        self.running = False
+        if self.browser_manager:
+            try:
+                self.browser_manager.stop_browser()
+            except:
+                pass
+            self.browser_manager = None
+        if self.auto_sender:
+            self.auto_send_running = False
+            self.auto_sender = None
 
 class ModernApp(QMainWindow):
     def __init__(self):
@@ -228,7 +265,7 @@ class ModernApp(QMainWindow):
             QProgressBar {
                 border: 2px solid #1a237e;
                 border-radius: 5px;
-                text-align: center;
+                text-align: justify;
                 height: 25px;
                 background-color: white;
             }
@@ -238,6 +275,14 @@ class ModernApp(QMainWindow):
             }
             QLabel {
                 color: #1a237e;
+            }
+            QLabel#progressLabel {
+                font-size: 14px;
+                font-weight: bold;
+                padding: 10px;
+                background-color: #f5f5f5;
+                border-radius: 5px;
+                border: 1px solid #1a237e;
             }
         """)
         
@@ -359,15 +404,9 @@ class ModernApp(QMainWindow):
         
         # Status label
         self.status_label = QLabel("Ready")
-        self.status_label.setStyleSheet("color: #666666;")
+        self.status_label.setObjectName("progressLabel")
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         progress_layout.addWidget(self.status_label)
-        
-        # Progress bar
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setMinimum(0)
-        self.progress_bar.setMaximum(100)
-        self.progress_bar.setValue(0)
-        progress_layout.addWidget(self.progress_bar)
         
         progress_group.setLayout(progress_layout)
         layout.addWidget(progress_group)
@@ -377,11 +416,18 @@ class ModernApp(QMainWindow):
     def start_auto_send(self):
         """Start the auto-send process."""
         try:
+            # Reset any existing auto-send state
+            if hasattr(self.worker_thread, 'auto_sender'):
+                self.worker_thread.auto_sender = None
+            self.worker_thread.auto_send_running = False
+            
             self.worker_thread.send_command('start_auto_send')
             self.auto_send_status.setText("Auto Send: Aktif")
             self.start_auto_send_btn.setEnabled(False)
             self.stop_auto_send_btn.setEnabled(True)
             logger.info("Auto-send process started")
+            # Show popup message every time auto-send is started
+            QMessageBox.information(self, "Info", "Auto-send sedang berjalan!")
         except Exception as e:
             logger.error(f"Failed to start auto-send: {e}")
             QMessageBox.critical(self, "Error", f"Failed to start auto-send: {str(e)}")
@@ -390,10 +436,15 @@ class ModernApp(QMainWindow):
         """Stop the auto-send process."""
         try:
             self.worker_thread.send_command('stop_auto_send')
+            # Ensure complete cleanup of auto-send state
+            if hasattr(self.worker_thread, 'auto_sender'):
+                self.worker_thread.auto_sender = None
+            self.worker_thread.auto_send_running = False
             self.auto_send_status.setText("Auto Send: Tidak Aktif")
             self.start_auto_send_btn.setEnabled(True)
             self.stop_auto_send_btn.setEnabled(False)
             logger.info("Auto-send process stopped")
+            QMessageBox.information(self, "Info", "Auto-send berhasil dihentikan!")
         except Exception as e:
             logger.error(f"Error stopping auto-send: {e}")
             QMessageBox.critical(self, "Error", f"Error stopping auto-send: {str(e)}")
@@ -401,16 +452,36 @@ class ModernApp(QMainWindow):
     def closeEvent(self, event):
         """Handle window close event."""
         try:
-            self.stop_auto_send()
+            # Stop auto-send if running
+            if self.worker_thread and self.worker_thread.auto_send_running:
+                self.stop_auto_send()
+                # Wait a bit for auto-send to stop
+                time.sleep(1)
+            
+            # Stop the worker thread
             if self.worker_thread:
+                self.worker_thread.running = False
                 self.worker_thread.send_command('close')
-                self.worker_thread.wait()
+                # Wait for worker thread to finish
+                self.worker_thread.wait(5000)  # Wait up to 5 seconds
+                self.worker_thread.quit()
+                self.worker_thread.deleteLater()
+            
+            # Close browser and cleanup Playwright
             if self.browser_manager:
-                self.browser_manager.close_browser()
+                try:
+                    self.browser_manager.stop_browser()
+                except Exception as e:
+                    logger.error(f"Error closing browser: {e}")
+                self.browser_manager = None
+                
             logger.info("Application closed successfully")
         except Exception as e:
             logger.error(f"Error during application closure: {e}")
-        event.accept()
+        finally:
+            # Force quit the application
+            QApplication.quit()
+            event.accept()
 
     def select_file(self):
         """Handle file selection."""
@@ -473,23 +544,22 @@ class ModernApp(QMainWindow):
         """Handle worker thread completion."""
         if action == 'open':
             self.browser_opened = True
-            self.progress_bar.setValue(100)
+            self.status_label.setText("Browser opened and ready!")
             QMessageBox.information(self, "Sukses", "Browser dibuka dan siap digunakan!")
         elif action == 'fill':
-            self.progress_bar.setValue(100)
+            self.status_label.setText("Form filled successfully!")
             QMessageBox.information(self, "Sukses", "Form berhasil diisi!")
         elif action == 'reload':
-            self.progress_bar.setValue(100)
+            self.status_label.setText("Page refreshed successfully!")
             QMessageBox.information(self, "Sukses", "Halaman berhasil dimuat ulang!")
         elif action == 'start_auto_send':
-            self.progress_bar.setValue(0)
-            QMessageBox.information(self, "Sukses", "Auto-send berhasil dimulai!")
+            self.status_label.setText("Auto-send started!")
         elif action == 'stop_auto_send':
-            self.progress_bar.setValue(0)
+            self.status_label.setText("Auto-send stopped!")
             QMessageBox.information(self, "Sukses", "Auto-send berhasil dihentikan!")
         elif action == 'close':
             self.browser_opened = False
-            self.progress_bar.setValue(0)
+            self.status_label.setText("Browser closed.")
             QMessageBox.information(self, "Info", "Browser ditutup.")
         self.update_button_states()
 
@@ -500,26 +570,10 @@ class ModernApp(QMainWindow):
         self.update_button_states()
 
     def update_status(self, message):
-        """Update the status label and progress bar with the given message."""
+        """Update the status label with the given message."""
         if hasattr(self, 'status_label'):
             self.status_label.setText(message)
-            
-            # Update progress bar based on message content
-            if "Waiting" in message and "seconds" in message:
-                # Extract seconds from message
-                try:
-                    seconds = int(message.split("seconds")[0].split("Waiting")[1].strip())
-                    # Calculate progress (assuming max wait is 3600 seconds)
-                    progress = min(100, int((3600 - seconds) / 3600 * 100))
-                    self.progress_bar.setValue(progress)
-                except:
-                    pass
-            elif "Completed" in message:
-                self.progress_bar.setValue(100)
-            elif "Starting" in message:
-                self.progress_bar.setValue(0)
-            
-        logger.info(message)
+            logger.info(message)
 
     def update_button_states(self):
         """Update the state of all buttons based on current conditions."""
