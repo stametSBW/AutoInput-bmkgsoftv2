@@ -40,7 +40,7 @@ class AutoInput:
         page.get_by_role("option", name=jenis_cl_lap2_value).click()
 
         # 27 Jumlah CL Lapisan 2
-        page.locator("div:nth-child(3) > div:nth-child(3) > .ant-select").first.press("Tab")
+        # page.locator("div:nth-child(3) > div:nth-child(3) > .ant-select").first.press("Tab")
         page.locator("div:nth-child(3) > div:nth-child(4) > .ant-select").first.press("ArrowDown")
         page.locator("div:nth-child(3) > div:nth-child(4) > .ant-select > .ant-select-selection > .ant-select-selection__rendered > .ant-select-search > .ant-select-search__field__wrap > .ant-select-search__field").first.fill(
             self.user_input['jumlah_cl_lapisan2'])
@@ -272,6 +272,7 @@ class AutoInput:
                         # bagian kolom arah sebenarnya >>>> di samain aja nilainya seperi arah Arah Gerak Awan Lapisan 1
                         page.locator("div:nth-child(9) > .ant-select > .ant-select-selection > .ant-select-selection__rendered").first.click()
                         page.locator("div:nth-child(9) > .ant-select > .ant-select-selection > .ant-select-selection__rendered > .ant-select-search > .ant-select-search__field__wrap > .ant-select-search__field").first.fill(arah_gerak_aw_lap1_value)
+                        page.locator("div:nth-child(9) > .ant-select > .ant-select-selection > .ant-select-selection__rendered > .ant-select-search > .ant-select-search__field__wrap > .ant-select-search__field").first.press("Enter")
 
                         if user_input['jenis_cl_lapisan1'] == "CB":
                             self.input_cloud_layer_2()
