@@ -31,7 +31,8 @@ class AutoInput:
         page = self.page
 
         # 25 Activate switch for the second cloud layer
-        page.locator(".switch-icon-left > .feather").first.click()
+        page.wait_for_selector(".switch-icon-right > .feather", timeout=60000)
+        page.locator(".switch-icon-right > .feather").first.click(timeout=30000)
 
         # 26 Jenis CL Lapisan 2
         jenis_cl_lap2_value = self.awan_lapisan.get(self.user_input['jenis_cl_lapisan2'], "0")
@@ -39,12 +40,18 @@ class AutoInput:
         page.get_by_role("option", name=jenis_cl_lap2_value).click()
 
         # 27 Jumlah CL Lapisan 2
-        page.locator(
-            "div:nth-child(3) > div:nth-child(4) > .ant-select > .ant-select-selection > .ant-select-selection__rendered").first.click()
-        page.locator(
-            "div:nth-child(3) > div:nth-child(4) > .ant-select > .ant-select-selection > .ant-select-selection__rendered > .ant-select-search > .ant-select-search__field__wrap > .ant-select-search__field").first.fill(
+        page.locator("div:nth-child(3) > div:nth-child(3) > .ant-select").first.press("Tab")
+        page.locator("div:nth-child(3) > div:nth-child(4) > .ant-select").first.press("ArrowDown")
+        page.locator("div:nth-child(3) > div:nth-child(4) > .ant-select > .ant-select-selection > .ant-select-selection__rendered > .ant-select-search > .ant-select-search__field__wrap > .ant-select-search__field").first.fill(
             self.user_input['jumlah_cl_lapisan2'])
-        page.get_by_role("option", name="oktas").click()
+        page.locator("div:nth-child(3) > div:nth-child(4) > .ant-select > .ant-select-selection > .ant-select-selection__rendered > .ant-select-search > .ant-select-search__field__wrap > .ant-select-search__field").first.press("Enter")
+
+        # page.locator(
+        #     "div:nth-child(3) > div:nth-child(4) > .ant-select > .ant-select-selection > .ant-select-selection__rendered").first.click()
+        # page.locator(
+        #     "div:nth-child(3) > div:nth-child(4) > .ant-select > .ant-select-selection > .ant-select-selection__rendered > .ant-select-search > .ant-select-search__field__wrap > .ant-select-search__field").first.fill(
+        #     self.user_input['jumlah_cl_lapisan2'])
+        # page.get_by_role("option", name="oktas").click()
 
         # 28 Tinggi Dasar Awan Lapisan 2
         page.locator("#cloud_low_base_2").click()
